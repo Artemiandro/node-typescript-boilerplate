@@ -135,6 +135,44 @@ keyboards.initPay = (price: number): Markup.Markup<any> => {
   ]);
 };
 
+////////////////////
+
+keyboards.endSupportDialog = (): Markup.Markup<any> => {
+  return Markup.inlineKeyboard([
+    [
+      {
+        text: 'Завершить диалог',
+        callback_data: `END_DIALOG`,
+      },
+    ],
+  ]);
+};
+
+keyboards.initMainMenu = (): Markup.Markup<any> => {
+  return Markup.inlineKeyboard([
+    [
+      {
+        text: 'Главоне меню',
+        callback_data: `MAIN_MENU`,
+      },
+    ],
+  ]);
+};
+
+//////////////////
+
+keyboards.getSupportMessages = (): Markup.Markup<any> => {
+  return Markup.inlineKeyboard([
+    [
+      {
+        text: 'Посмотреть обращения',
+        callback_data: `GET_SUPPORT_MES`,
+      },
+    ],
+    [Back.BACK],
+  ]);
+};
+
 keyboards.back = (): Markup.Markup<any> => {
   return Markup.inlineKeyboard([[Back.BACK]]);
 };

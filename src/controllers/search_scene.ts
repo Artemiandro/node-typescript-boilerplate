@@ -51,18 +51,14 @@ export class Search_Scene {
   }
 
   private async enter(ctx): Promise<void> {
-    console.log('Enter stage Search');
     return ctx.replyWithHTML(phrases.search_main, keyboards.mainSearchMenu());
   }
 
   private leave(ctx): void {
-    console.log('Leave stage Search');
     return ctx.replyWithHTML(phrases.main, keyboards.mainMenu());
   }
 
   private async startStopTasksMain(ctx): Promise<any> {
-    console.log('Start stop tasks main');
-
     let callback_data = ctx.update.callback_query;
     let _user = await db.getUser(callback_data.from.id);
 
@@ -80,7 +76,6 @@ export class Search_Scene {
   }
 
   private async editTasksMain(ctx) {
-    console.log('Edit tasks main');
     let _user = await db.getUser(ctx.update.callback_query.from.id);
 
     ctx.replyWithHTML(
@@ -94,15 +89,11 @@ export class Search_Scene {
     let id = messageArray[1];
 
     if (messageArray[2] === 'EDIT') {
-      console.log(`Edit task ${id}`);
       this.reset();
       this.editSearchValues.push(id);
       ctx.replyWithHTML(phrases.task_edit, keyboards.subBack());
     } else if (messageArray[2] === 'START') {
-      console.log(`Start task ${id}`);
       let _user = await db.getUser(ctx.update.callback_query.from.id);
-      //  let currentTimestamp = Math.floor(Date.now() / 1000);
-      // && _user.subscribtionTo > currentTimestamp
 
       if (!_user.tasks[id].is_Active) {
         _user.tasks[id].is_Active = true;
@@ -114,8 +105,6 @@ export class Search_Scene {
         ctx.replyWithHTML(phrases.error, keyboards.mainSearchMenu());
       }
     } else {
-      console.log(`Stop task ${id}`);
-
       let _user = await db.getUser(ctx.update.callback_query.from.id);
       if (_user.tasks[id].is_Active) {
         _user.tasks[id].is_Active = false;

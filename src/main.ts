@@ -7,15 +7,17 @@ import { Search_Scene } from './controllers/search_scene.js';
 import { Account_Scene } from './controllers/account_scene.js';
 import { Support_Scene } from './controllers/support_scene.js';
 import db from './helpers/database.js';
+import { Admin_Scene } from './controllers/admin_scene.js';
 
 export const bot = new Telegraf<Scenes.SceneContext>(conf.botToken);
 
 const account = new Account_Scene();
 const search = new Search_Scene();
 const support = new Support_Scene();
+const admin = new Admin_Scene();
 
 const stage = new Scenes.Stage<Scenes.SceneContext>(
-  [search.scene, account.scene, support.scene],
+  [search.scene, account.scene, support.scene, admin.scene],
   {
     ttl: 1800,
   },
@@ -44,6 +46,10 @@ bot.use(stage.middleware());
     return ctx.scene.enter(support.sceneKey);
   });
 
+  bot.command(conf.authSupabase.password, async (ctx) => {
+    return ctx.scene.enter(admin.sceneKey);
+  });
+
   bot.launch();
 })();
 
@@ -54,8 +60,6 @@ async function checkUser(сtx): Promise<void> {
   let _user = await db.getUser(сtx.update.message.from.id);
 
   if (!_user) {
-    console.log('Юзер не зарегистрирован');
-
     _user = {
       id: сtx.update.message.from.id,
       balance: 0,
@@ -69,8 +73,6 @@ async function checkUser(сtx): Promise<void> {
     };
     await db.setUserListener(_user);
   } else if (_user.subscribtionTo < Math.floor(Date.now() / 1000)) {
-    console.log('Пописка юзера окончена');
-
     _user.tasks = {};
     _user.max_tasks_num = 0;
     _user.ads_1 = {};

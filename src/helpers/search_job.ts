@@ -10,68 +10,70 @@ const baseUrl = 'https://www.avito.ru/';
 let job: CronJob;
 let initSkip: boolean;
 let searchLetters = ['Z', 'V', 'U', 'X', 'J', 'T'];
-let indexLetters = 0;
+
+async function fetchWithRetries(
+  url: string,
+  letters: string[],
+): Promise<string> {
+  for (let i = 0; i < letters.length; i++) {
+    try {
+      const response = await axios.get(url.replace('{letter}', letters[i]));
+      return response.data;
+    } catch (error) {
+      if (i === letters.length - 1) {
+        throw new Error('All retries failed');
+      }
+    }
+  }
+  throw new Error('No letters left to try');
+}
+
+function parseAds(html: string): Collection<Ad> {
+  const dom = new JSDOM(html);
+  const document = dom.window.document;
+  const items = document.querySelectorAll('[data-marker=item]');
+  const parsedAds: Collection<Ad> = {};
+
+  items.forEach((node) => {
+    parsedAds[node.id] = {
+      id: node.id,
+      title: node.querySelector('[itemprop=name]').textContent,
+      price: Number(
+        node.querySelector('[itemprop=price]').getAttribute('content'),
+      ),
+      url: node.querySelector('[itemprop=url]').getAttribute('href'),
+      description: node
+        .querySelector('[itemprop=description]')
+        .getAttribute('content'),
+      date: node.querySelector('[data-marker=item-date]').textContent,
+    };
+  });
+
+  return parsedAds;
+}
 
 function createJob(user: User, id: number): CronJob {
-  console.log('Создаю задачу ' + id);
   return new CronJob(user.tasks[id].cron, async () => {
     await pause(3000);
 
     let html: string;
     try {
-      // console.log(
-      //   `${baseUrl}${task.city}?cd=1&d=${task.dostavka}&f=ASgCAgECAUXGmgw${searchLetters[indexLetters]}${encodeFilter(Number(task.priceFrom), Number(task.priceTo))}&q=${task.query}&s=104`,
-      // );
-      // return;
-      let resp = await axios.get(
-        `${baseUrl}${user.tasks[id].city}?cd=1&d=${user.tasks[id].dostavka}&f=ASgCAgECAUXGmgw${searchLetters[indexLetters]}${encodeFilter(Number(user.tasks[id].price_From), Number(user.tasks[id].price_To))}&q=${user.tasks[id].query}&s=104`,
-      );
-      html = resp.data;
+      const urlTemplate = `${baseUrl}${user.tasks[id].city}?cd=1&d=${user.tasks[id].dostavka}&f=ASgCAgECAUXGmgw{letter}${encodeFilter(Number(user.tasks[id].price_From), Number(user.tasks[id].price_To))}&q=${user.tasks[id].query}&s=104`;
+      html = await fetchWithRetries(urlTemplate, searchLetters);
     } catch (error) {
-      console.log(`Axios error ${error}`);
-      if (searchLetters.length + 1 > indexLetters) {
-        indexLetters++;
-      } else {
-        indexLetters = 0;
-      }
+      console.log(error);
       return;
     }
 
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-    const items = document.querySelectorAll('[data-marker=item]');
-    const parsedAds: Collection<Ad> = {};
+    const parsedAds = parseAds(html);
+    const data = await db.getSaveAds(user);
+    const savedAds: Collection<Ad> = data[`ads_${id}`];
 
-    items.forEach((node) => {
-      parsedAds[node.id] = {
-        id: node.id,
-        title: node.querySelector('[itemprop=name]').textContent,
-        price: Number(
-          node.querySelector('[itemprop=price]').getAttribute('content'),
-        ),
-        url: node.querySelector('[itemprop=url]').getAttribute('href'),
-        description: node
-          .querySelector('[itemprop=description]')
-          .getAttribute('content'),
-        date: node.querySelector('[data-marker=item-date]').textContent,
-      };
-    });
-
-    let data = await db.getSaveAds(user);
-    let savedAds: Collection<Ad> = data[`ads_${id}`];
     if (Object.keys(savedAds).length === 0) {
-      console.log('Empty dict');
       initSkip = true;
     }
 
     const newIds = compareCollections(savedAds, parsedAds);
-    console.log(newIds);
-
-    let tasks = await db.getTasks(user.id);
-    if (!tasks[id].is_Active) {
-      job.stop();
-      return;
-    }
 
     let filteredNewAdv: Collection<Ad> = {};
     for (const id of newIds) {
@@ -112,10 +114,14 @@ function notifyUser(data: Ad): string {
 
 export async function runSearchJob(user: User, id: number) {
   await pause(5000);
-  console.log(
-    `Получена задача ${user.tasks[id].id} для пользователя ${user.id}`,
-  );
-
   job = createJob(user, id);
   job.start();
+
+  db.subscribeToTaskUpdates(user, id)
+    .then(() => {
+      job.stop();
+    })
+    .catch((error) => {
+      console.error('Ошибка подписки на обновления задач:', error);
+    });
 }
